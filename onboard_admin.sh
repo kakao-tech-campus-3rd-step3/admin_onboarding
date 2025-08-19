@@ -59,8 +59,48 @@ need()  { command -v "$1" >/dev/null 2>&1 || die "'$1' 가(이) 필요합니다.
 # 의존 도구 체크
 check_requirements
 
-# gh 인증 체크
-gh auth status -h github.com >/dev/null 2>&1 || die "먼저 'gh auth login' 해주세요. (Org Owner 권한 필요)"
+# gh 인증 및 권한 체크
+check_gh_auth() {
+  log "GitHub CLI 인증 상태 확인 중..."
+
+  # 기본 인증 상태 체크
+  if ! gh auth status -h github.com >/dev/null 2>&1; then
+    die "먼저 'gh auth login' 해주세요."
+  fi
+
+  # Organization 관리 권한(admin:org) 체크
+  log "Organization 관리 권한 확인 중..."
+  if ! gh api /user >/dev/null 2>&1; then
+    warn "GitHub API 접근에 문제가 있습니다. 권한을 갱신합니다."
+    log "Organization 관리에 필요한 권한을 요청합니다..."
+    if ! gh auth refresh -h github.com -s admin:org; then
+      die "권한 갱신에 실패했습니다. 수동으로 'gh auth refresh -h github.com -s admin:org'를 실행해주세요."
+    fi
+  fi
+
+  # 실제 Organization 접근 권한 테스트
+  log "Organization '${ORG}' 접근 권한 확인 중..."
+  if ! gh api "/orgs/${ORG}" >/dev/null 2>&1; then
+    warn "Organization '${ORG}'에 접근할 수 없습니다. 권한을 갱신합니다."
+    log "Organization 관리에 필요한 권한을 요청합니다..."
+    if ! gh auth refresh -h github.com -s admin:org; then
+      die "권한 갱신에 실패했습니다. 다음을 확인해주세요:
+  1. Organization Owner 권한이 있는지 확인
+  2. 수동으로 'gh auth refresh -h github.com -s admin:org' 실행
+  3. Organization 이름이 올바른지 확인: ${ORG}"
+    fi
+
+    # 권한 갱신 후 재확인
+    if ! gh api "/orgs/${ORG}" >/dev/null 2>&1; then
+      die "권한 갱신 후에도 Organization '${ORG}'에 접근할 수 없습니다.
+Organization Owner 권한이 있는지 확인해주세요."
+    fi
+  fi
+
+  log "GitHub CLI 인증 및 권한 확인 완료"
+}
+
+check_gh_auth
 
 # CSV 파일 체크
 [[ -f "$CSV_FILE" ]] || die "CSV 파일을 찾을 수 없습니다: $CSV_FILE"
