@@ -9,10 +9,11 @@ GitHub Organization에서 팀 생성, 멤버 초대, 레포지토리 생성 및 
 3. **레포지토리 생성**: 각 팀별로 백엔드/프론트엔드 레포 생성 (TeamX_BE, TeamX_FE)
 4. **권한 설정**: 팀과 레포지토리 간 권한 연결 (팀=push, Admin팀=admin)
 5. **Admin 팀 관리**: 모든 멤버를 Admin 팀에도 동시 배정하여 전체 레포 관리 권한 부여
+6. **자동 권한 관리**: GitHub CLI 인증 상태 및 Organization 관리 권한 자동 확인 및 갱신
 
 ## 필요한 프로그램
 
-스크립트 실행 전에 다음 프로그램들이 설치되어 있어야 합니다:
+스크립트는 실행 시 자동으로 필요한 프로그램들을 체크하고, 미설치 시 상세한 설치 가이드를 제공합니다.
 
 ### 필수 프로그램
 - **GitHub CLI (gh)**: GitHub API 호출용
@@ -29,19 +30,27 @@ GitHub Organization에서 팀 생성, 멤버 초대, 레포지토리 생성 및 
 
 ## 사전 준비
 
-1. **GitHub CLI 인증**
-   ```bash
-   gh auth login
-   ```
-   - Organization Owner 권한이 필요합니다.
+### 1. GitHub CLI 인증
+```bash
+gh auth login
+```
 
-2. **CSV 파일 준비** (`members.csv`)
-   ```csv
-   team_no,email
-   5,user1@example.com
-   6,user2@example.com
-   7,user3@example.com
-   ```
+**중요**: 스크립트는 Organization 관리 권한(`admin:org`)이 필요한지 자동으로 확인하고, 필요시 다음 명령을 자동 실행합니다:
+```bash
+gh auth refresh -h github.com -s admin:org
+```
+
+- Organization Owner 권한이 필요합니다
+- 권한이 부족한 경우 스크립트가 자동으로 권한 갱신을 시도합니다
+- 자동 갱신 실패 시 수동 해결 방법을 안내합니다
+
+### 2. CSV 파일 준비 (`members.csv`)
+```csv
+team_no,email
+5,user1@example.com
+6,user2@example.com
+7,user3@example.com
+```
 
 ## 사용법
 
@@ -50,6 +59,7 @@ GitHub Organization에서 팀 생성, 멤버 초대, 레포지토리 생성 및 
 ./onboard_admin.sh
 ```
 - 현재 디렉토리의 `members.csv` 파일을 사용합니다.
+- 자동으로 필요한 프로그램과 권한을 체크합니다.
 
 ### CSV 파일 경로 지정
 ```bash
@@ -76,7 +86,14 @@ ORG="your-org-name" ADMIN_TEAM_NAME="Administrators" ./onboard_admin.sh
 
 ## 실행 과정
 
-스크립트는 다음 4단계로 진행됩니다:
+스크립트는 다음과 같은 단계로 진행됩니다:
+
+### 사전 체크 단계
+- **필수 프로그램 확인**: gh, jq, awk, tr, sed 설치 상태 확인
+- **GitHub CLI 인증 확인**: 로그인 상태 및 API 접근 권한 확인
+- **Organization 접근 권한 확인**: 대상 Organization에 대한 관리 권한 확인
+- **자동 권한 갱신**: 필요시 `admin:org` 스코프로 권한 자동 갱신
+- **CSV 파일 검증**: 파일 존재 및 유효한 데이터 확인
 
 ### 1단계: 팀 생성
 - CSV에서 발견된 팀 번호를 기반으로 팀 생성 (예: Team5, Team6, Team7...)
@@ -129,19 +146,32 @@ team_no,email
 
 ## 오류 해결
 
+### 권한 관련 오류
+
+1. **"GitHub CLI 인증이 필요합니다"**
+   - 해결: `gh auth login` 실행
+
+2. **"Organization 관리 권한이 없습니다"**
+   - 스크립트가 자동으로 `gh auth refresh -h github.com -s admin:org` 실행
+   - 자동 갱신 실패 시 수동 실행 가이드 제공
+
+3. **"Organization Owner 권한이 필요합니다"**
+   - GitHub 웹사이트에서 Organization Owner 권한 확인 필요
+   - Organization 설정에서 멤버 권한 확인
+
 ### 일반적인 오류들
 
-1. **"invalid control character in URL" 오류**
-   - 팀 이름이나 URL에 특수문자가 포함된 경우 발생
-   - CSV 파일의 데이터 정리 확인
+1. **"필수 프로그램이 설치되지 않았습니다"**
+   - 스크립트가 자동으로 설치 가이드 출력
+   - 플랫폼별 설치 명령어 제공
 
 2. **초대 실패**
    - 이미 멤버이거나 초대가 중복된 경우
    - 경고로 처리되며 스크립트 계속 진행
 
-3. **권한 오류**
-   - GitHub CLI가 Organization Owner 권한으로 인증되지 않은 경우
-   - `gh auth login`으로 재인증 필요
+3. **CSV 파일 오류**
+   - 파일 경로, 형식, 데이터 유효성 자동 확인
+   - 상세한 오류 메시지 제공
 
 ### 로그 확인
 스크립트는 상세한 로그를 출력하므로 오류 발생 시 해당 단계를 확인할 수 있습니다:
@@ -156,6 +186,25 @@ team_no,email
 3. **테스트**: 첫 실행 시 `DRY_RUN=true`로 테스트 권장
 4. **멱등성**: 스크립트는 여러 번 실행해도 안전함 (이미 존재하는 리소스는 건너뜀)
 5. **CSV 검증**: 잘못된 형식의 데이터는 경고 후 건너뜀
+6. **자동 권한 관리**: 스크립트가 필요한 권한을 자동으로 확인하고 갱신 시도
+
+## 실행 예시
+
+```bash
+# 기본 실행
+./onboard_admin.sh
+
+# 출력 예시:
+[INFO] GitHub CLI 인증 상태 확인 중...
+[INFO] Organization 관리 권한 확인 중...
+[INFO] Organization 'kakao-tech-campus-3rd-step3' 접근 권한 확인 중...
+[INFO] GitHub CLI 인증 및 권한 확인 완료
+[INFO] CSV에서 발견된 팀 번호: 5 6 7 8 9 10 11 12 13 14
+[INFO] == 1) 팀 생성 시작 ==
+[INFO] 팀 생성: Admins
+[INFO] 팀 생성 완료: Admins (slug=admins, id=12345)
+...
+```
 
 ## 라이선스
 
