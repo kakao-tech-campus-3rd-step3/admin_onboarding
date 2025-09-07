@@ -36,6 +36,55 @@ import json
 from datetime import datetime, timedelta
 import sys
 
+def check_gh_auth():
+    """GitHub CLI 설치 및 인증 상태 확인"""
+    try:
+        # gh 명령어 존재 여부 확인
+        subprocess.run(['gh', '--version'], capture_output=True, check=True)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print("❌ GitHub CLI (gh)가 설치되어 있지 않습니다.")
+        print("\n설치 방법:")
+        print("  macOS: brew install gh")
+        print("  Linux: https://github.com/cli/cli/blob/trunk/docs/install_linux.md")
+        print("  Windows: https://github.com/cli/cli/releases")
+        sys.exit(1)
+    
+    try:
+        # 인증 상태 확인
+        result = subprocess.run(['gh', 'auth', 'status'], capture_output=True, text=True)
+        if result.returncode != 0:
+            print("❌ GitHub CLI에 로그인되어 있지 않습니다.")
+            print("\n로그인 방법:")
+            print("  gh auth login")
+            print("\n또는 토큰을 사용한 로그인:")
+            print("  gh auth login --with-token")
+            sys.exit(1)
+    except subprocess.CalledProcessError:
+        print("❌ GitHub CLI 인증 상태를 확인할 수 없습니다.")
+        print("\n다음 명령어로 로그인해주세요:")
+        print("  gh auth login")
+        sys.exit(1)
+    
+    # kakao-tech-campus-3rd-step3 조직 접근 권한 확인
+    try:
+        result = subprocess.run([
+            'gh', 'repo', 'list', 'kakao-tech-campus-3rd-step3', '--limit', '1'
+        ], capture_output=True, text=True, check=True)
+        
+        if not result.stdout.strip():
+            print("❌ kakao-tech-campus-3rd-step3 조직의 레포지토리에 접근할 수 없습니다.")
+            print("\n다음을 확인해주세요:")
+            print("  1. 조직에 초대되었는지 확인")
+            print("  2. 조직 멤버십이 public으로 설정되었는지 확인")
+            print("  3. GitHub CLI에 올바른 계정으로 로그인되었는지 확인")
+            sys.exit(1)
+    except subprocess.CalledProcessError:
+        print("❌ kakao-tech-campus-3rd-step3 조직에 접근할 수 없습니다.")
+        print("\n권한을 확인해주세요.")
+        sys.exit(1)
+    
+    print("✅ GitHub CLI 설정이 완료되었습니다.")
+
 def get_last_friday():
     """현재 시점에서 가장 최근 금요일 날짜를 반환"""
     today = datetime.now()
@@ -85,6 +134,10 @@ def get_team_repos():
     return repos
 
 def main():
+    # GitHub CLI 설정 확인
+    check_gh_auth()
+    print()  # 빈 줄 추가
+    
     last_friday = get_last_friday()
     current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     
